@@ -29,6 +29,7 @@ var BinaryOpName = map[tree.BinaryOperator]string{
 	tree.LShift:       "LShift",
 	tree.RShift:       "RShift",
 	tree.JSONFetchVal: "JSONFetchVal",
+	tree.JSONFetchTextPath: "JSONFetchTextPath",
 }
 
 // ComparisonOpName is a mapping from all comparison operators that are

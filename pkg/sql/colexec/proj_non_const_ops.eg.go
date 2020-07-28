@@ -26067,6 +26067,120 @@ func (p projJSONFetchValDatumInt64Op) Init() {
 	p.input.Init()
 }
 
+type projJSONFetchTextPathDatumDatumOp struct {
+	projOpBase
+}
+
+func (p projJSONFetchTextPathDatumDatumOp) Next(ctx context.Context) coldata.Batch {
+	// In order to inline the templated code of overloads, we need to have a
+	// `_overloadHelper` local variable of type `overloadHelper`.
+	_overloadHelper := p.overloadHelper
+	// However, the scratch is not used in all of the projection operators, so
+	// we add this to go around "unused" error.
+	_ = _overloadHelper
+
+
+	batch := p.input.Next(ctx)
+	n := batch.Length()
+	if n == 0 {
+		return coldata.ZeroBatch
+	}
+	projVec := batch.ColVec(p.outputIdx)
+	if projVec.MaybeHasNulls() {
+		// We need to make sure that there are no left over null values in the
+		// output vector.
+		projVec.Nulls().UnsetNulls()
+	}
+	projCol := projVec.Datum()
+	vec1 := batch.ColVec(p.col1Idx)
+	vec2 := batch.ColVec(p.col2Idx)
+	col1 := vec1.Datum()
+	col2 := vec2.Datum()
+	if vec1.Nulls().MaybeHasNulls() || vec2.Nulls().MaybeHasNulls() {
+		col1Nulls := vec1.Nulls()
+		col2Nulls := vec2.Nulls()
+		if sel := batch.Selection(); sel != nil {
+			sel = sel[:n]
+			for _, i := range sel {
+				if !col1Nulls.NullAt(i) && !col2Nulls.NullAt(i) {
+					// We only want to perform the projection operation if both values are not
+					// null.
+					arg1 := col1.Get(i)
+					arg2 := col2.Get(i)
+
+					_res, err := arg1.(*coldataext.Datum).BinFn(_overloadHelper.binFn, _overloadHelper.evalCtx, arg2)
+					if err != nil {
+						colexecerror.ExpectedError(err)
+					}
+					projCol.Set(i, _res)
+
+				}
+			}
+		} else {
+			col1 = col1.Slice(0, n)
+			colLen := col1.Len()
+			_ = projCol.Get(colLen - 1)
+			_ = col2.Get(colLen - 1)
+			for i := 0; i < n; i++ {
+				if !col1Nulls.NullAt(i) && !col2Nulls.NullAt(i) {
+					// We only want to perform the projection operation if both values are not
+					// null.
+					arg1 := col1.Get(i)
+					arg2 := col2.Get(i)
+
+					_res, err := arg1.(*coldataext.Datum).BinFn(_overloadHelper.binFn, _overloadHelper.evalCtx, arg2)
+					if err != nil {
+						colexecerror.ExpectedError(err)
+					}
+					projCol.Set(i, _res)
+
+				}
+			}
+		}
+		projVec.SetNulls(col1Nulls.Or(col2Nulls))
+	} else {
+		if sel := batch.Selection(); sel != nil {
+			sel = sel[:n]
+			for _, i := range sel {
+				arg1 := col1.Get(i)
+				arg2 := col2.Get(i)
+
+				_res, err := arg1.(*coldataext.Datum).BinFn(_overloadHelper.binFn, _overloadHelper.evalCtx, arg2)
+				if err != nil {
+					colexecerror.ExpectedError(err)
+				}
+				projCol.Set(i, _res)
+
+			}
+		} else {
+			col1 = col1.Slice(0, n)
+			colLen := col1.Len()
+			_ = projCol.Get(colLen - 1)
+			_ = col2.Get(colLen - 1)
+			for i := 0; i < n; i++ {
+				arg1 := col1.Get(i)
+				arg2 := col2.Get(i)
+
+				_res, err := arg1.(*coldataext.Datum).BinFn(_overloadHelper.binFn, _overloadHelper.evalCtx, arg2)
+				if err != nil {
+					colexecerror.ExpectedError(err)
+				}
+				projCol.Set(i, _res)
+
+			}
+		}
+	}
+
+	// Although we didn't change the length of the batch, it is necessary to set
+	// the length anyway (this helps maintaining the invariant of flat bytes).
+	batch.SetLength(n)
+	return batch
+}
+
+func (p projJSONFetchTextPathDatumDatumOp) Init() {
+	p.input.Init()
+}
+
 type projEQBoolBoolOp struct {
 	projOpBase
 }
@@ -54733,6 +54847,22 @@ func GetProjectionOperator(
 						case -1:
 						default:
 							return &projJSONFetchValDatumInt64Op{projOpBase: projOpBase}, nil
+						}
+					}
+				}
+			}
+		case tree.JSONFetchTextPath:
+			switch typeconv.TypeFamilyToCanonicalTypeFamily(leftType.Family()) {
+			case typeconv.DatumVecCanonicalTypeFamily:
+				switch leftType.Width() {
+				case -1:
+				default:
+					switch typeconv.TypeFamilyToCanonicalTypeFamily(rightType.Family()) {
+					case typeconv.DatumVecCanonicalTypeFamily:
+						switch rightType.Width() {
+						case -1:
+						default:
+							return &projJSONFetchTextPathDatumDatumOp{projOpBase: projOpBase}, nil
 						}
 					}
 				}

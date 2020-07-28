@@ -613,3 +613,11 @@ NULL
 true
 true
 false
+
+query T
+EXPLAIN (VEC) SELECT _json #>> Array['a']  FROM many_types
+----
+│
+└ Node 1
+  └ *colexec.projJSONFetchValDatumConstInt64Op
+    └ *colfetcher.colBatchScan
